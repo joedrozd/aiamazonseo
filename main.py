@@ -255,9 +255,9 @@ class SEOArticleGenerator:
         Returns:
             Generated HTML article content
         """
-        # Format products for the API
+        # Format products for the API with full affiliate URLs
         products_text = "\n".join([
-            f"- {p.get('title', 'N/A')} (Price: {p.get('price', 'N/A')}, Rating: {p.get('rating', 'N/A')})"
+            f"- {p.get('title', 'N/A')} (Price: {p.get('price', 'N/A')}, Rating: {p.get('rating', 'N/A')}, URL: {p.get('url', 'N/A')}, Search Keyword: {p.get('search_keyword', 'N/A')})"
             for p in products[:10]  # Limit to first 10 products
         ])
 
@@ -279,6 +279,31 @@ class SEOArticleGenerator:
         Focus on providing value while including affiliate product recommendations.
 
         Return only the HTML content, no markdown or code blocks.
+
+        Please ensure the HTML is well-formed and complete.
+
+        Make the word count between 800-1500 words.
+        Do not include any disclaimers or notes about affiliate links.
+        Use a friendly and conversational tone.
+
+        Example structure:
+        <h1>Main Title</h1>     
+        <p>Introductory paragraph...</p>
+        <h2>Section Heading</h2>
+        <p>Content...</p>
+
+        <h3>Subsection Heading</h3>
+        <p>More content...</p>
+        <ul>
+            <li><a href="product_link_1">Product 1</a> - brief description</li>
+            <li><a href="product_link_2">Product 2</a> - brief description</li>
+            ...
+        </ul>
+        <p>Conclusion paragraph...</p>
+
+        
+        Ensure the HTML is valid and can be directly used in a blog post.
+        Return only the HTML Body content, nothing else.
         """
 
         logger.info("Requesting HTML article generation from API")
@@ -297,7 +322,7 @@ class SEOArticleGenerator:
             logger.error(f"Error extracting article content: {str(e)}")
             return None
 
-    def save_article_to_file(self, content: str, filename: str = "seo_article.txt") -> bool:
+    def save_article_to_file(self, content: str, filename: str = "seo_article.html") -> bool:
         """
         Save the generated article to a text file.
 
