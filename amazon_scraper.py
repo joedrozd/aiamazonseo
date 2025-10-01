@@ -62,14 +62,27 @@ class AmazonScraper:
         try:
             options = Options()
             if self.headless:
-                options.add_argument('--headless')
+                options.add_argument('--headless')  # Revert to standard headless for compatibility
             options.add_argument('--no-sandbox')
             options.add_argument('--disable-dev-shm-usage')
             options.add_argument('--disable-blink-features=AutomationControlled')
             options.add_experimental_option("excludeSwitches", ["enable-automation"])
             options.add_experimental_option('useAutomationExtension', False)
 
-            self.driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
+            # Try multiple approaches to get the correct Chrome driver
+            try:
+                # First try with explicit platform and version specification
+                driver_path = ChromeDriverManager(platform="win64", driver_version="130.0.6723.69").install()
+            except:
+                try:
+                    # Fallback to standard installation
+                    driver_path = ChromeDriverManager().install()
+                except:
+                    # Last resort - try a known working version
+                    driver_path = ChromeDriverManager(driver_version="130.0.6723.69").install()
+
+            service = webdriver.ChromeService(driver_path)
+            self.driver = webdriver.Chrome(service=service, options=options)
             self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             logger.info("Selenium WebDriver initialized")
         except Exception as e:
@@ -130,48 +143,119 @@ class AmazonScraper:
         try:
             product_data = {}
 
-            # Title
-            title_elem = product_element.select_one('h2 a.a-link-normal') or product_element.find('a', class_='a-link-normal')
+            # Title - Try multiple selectors for better compatibility
+            title_elem = None
+            title_selectors = [
+                'h2 a.a-link-normal',
+                'h2 a[href*="dp/"]',
+                '.a-text-normal',
+                '.a-color-base.a-text-normal',
+                '.a-size-medium.a-color-base.a-text-normal'
+            ]
+
+            for selector in title_selectors:
+                title_elem = product_element.select_one(selector)
+                if title_elem and title_elem.get_text().strip():
+                    break
+
             product_data['title'] = title_elem.get_text().strip() if title_elem else None
 
-            # URL
-            raw_url = urljoin(self.base_url, title_elem['href']) if title_elem and 'href' in title_elem.attrs else None
+            # URL - Extract from the title element or search within the product
+            raw_url = None
+            if title_elem and 'href' in title_elem.attrs:
+                raw_url = urljoin(self.base_url, title_elem['href'])
+            else:
+                # Fallback: look for any link with dp/ (product detail page)
+                link_elem = product_element.find('a', href=re.compile(r'/dp/'))
+                if link_elem:
+                    raw_url = urljoin(self.base_url, link_elem['href'])
+
             product_data['url'] = self._add_affiliate_tag(raw_url) if raw_url else None
 
-            # Price
-            price_elem = product_element.select_one('span.a-price .a-offscreen')
+            # Price - Try multiple selectors
+            price_elem = None
+            price_selectors = [
+                'span.a-price .a-offscreen',
+                'span.a-price-whole',
+                'span.a-color-price',
+                '.a-price .a-offscreen'
+            ]
+
+            for selector in price_selectors:
+                price_elem = product_element.select_one(selector)
+                if price_elem and price_elem.get_text().strip():
+                    break
+
             if price_elem:
                 price_text = re.sub(r'[^\d.]', '', price_elem.get_text())
                 product_data['price'] = price_text if price_text else None
             else:
                 product_data['price'] = None
 
-            # Rating
-            rating_elem = product_element.find('span', class_='a-icon-alt')
+            # Rating - Try multiple selectors
+            rating_elem = None
+            rating_selectors = [
+                'span.a-icon-alt',
+                'i.a-icon-star-small span',
+                '.a-icon-alt',
+                'span[aria-label*="out of 5 stars"]'
+            ]
+
+            for selector in rating_selectors:
+                rating_elem = product_element.select_one(selector)
+                if rating_elem:
+                    break
+
             if rating_elem:
                 rating_match = re.search(r'(\d+\.?\d*)', rating_elem.get_text())
                 product_data['rating'] = float(rating_match.group(1)) if rating_match else None
             else:
                 product_data['rating'] = None
 
-            # Reviews count
-            reviews_elem = product_element.select_one('span.a-size-base')
+            # Reviews count - Try multiple selectors
+            reviews_elem = None
+            reviews_selectors = [
+                'span.a-size-base',
+                '.a-size-small',
+                'span[aria-label*="ratings"]',
+                'a[href*="review"] span'
+            ]
+
+            for selector in reviews_selectors:
+                reviews_elem = product_element.select_one(selector)
+                if reviews_elem:
+                    break
+
             if reviews_elem:
                 reviews_match = re.search(r'\d+(?:,\d+)*', reviews_elem.get_text())
                 product_data['reviews_count'] = int(reviews_match.group(0).replace(',', '')) if reviews_match else None
             else:
                 product_data['reviews_count'] = None
 
-            # Image
-            img_elem = product_element.find('img', class_='s-image')
+            # Image - Try multiple selectors
+            img_elem = None
+            img_selectors = [
+                'img.s-image',
+                'img[data-image-index]',
+                '.s-image',
+                'img[src*="media-amazon.com"]'
+            ]
+
+            for selector in img_selectors:
+                img_elem = product_element.select_one(selector)
+                if img_elem and 'src' in img_elem.attrs:
+                    break
+
             product_data['image_url'] = img_elem['src'] if img_elem and 'src' in img_elem.attrs else None
 
-            # ASIN
+            # ASIN - Extract from URL or data-asin attribute
             if product_data['url']:
                 asin_match = re.search(r'/dp/([A-Z0-9]{10})', product_data['url'])
                 product_data['asin'] = asin_match.group(1) if asin_match else None
             else:
-                product_data['asin'] = None
+                # Try to get ASIN from data-asin attribute
+                asin_elem = product_element.get('data-asin') or product_element.find(attrs={'data-asin': True})
+                product_data['asin'] = asin_elem.get('data-asin') if asin_elem else None
 
             return product_data
         except Exception as e:

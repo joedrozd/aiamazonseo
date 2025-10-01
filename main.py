@@ -52,12 +52,12 @@ class SEOArticleGenerator:
             payload = {"messages": [{"role": "user", "content": prompt}]}
 
             logger.info(f"Sending request to {self.api_url}")
-            print(f"⏳ Generating response (this may take 30-120 seconds)...")
+            print(f"⏳ Generating response (this may take 5-10 minutes)...")
             response = self.session.post(
                 self.api_url,
                 json=payload,
                 headers={"Content-Type": "application/json"},
-                timeout=500.0  # Increased timeout to 3 minutes for generation
+                timeout=5000.0 
             )
 
             response.raise_for_status()
