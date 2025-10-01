@@ -19,6 +19,10 @@ A collection of Python tools for web scraping and data collection, featuring an 
 ### Prerequisites
 - Python 3.7 or higher
 - Chrome browser (for Selenium mode)
+- LM Studio
+### LM Studio use 
+
+This project uses LM Studio to run LLMs directly on localhost, enabling fast, private, and offline inference without relying on external APIs. By hosting models locally, I can control system resources, test integrations in a contained environment, and ensure reproducibility across setups.
 
 ### Installation
 
